@@ -1,0 +1,69 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_VL53L0X.h>
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+  
+// Sensor setup
+Adafruit_VL53L0X lox = Adafruit_VL53L0X();
+
+// WiFi and MQTT setup
+const char* ssid = "router11";
+const char* password = "iotempire";
+const char* mqtt_server = "192.168.14.1";
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Connecting to MQTT...");
+    if (client.connect("proximity_sensor")) {
+      Serial.println("connected");
+    } else {
+      Serial.print("failed: ");
+      Serial.println(client.state());
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(D2, D1); // SDA, SCL (GPIO4, GPIO5)
+
+  if (!lox.begin()) {
+    Serial.println("VL53L0X not detected. Check wiring!");
+    while (true);
+  }
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+
+  client.setServer(mqtt_server, 1883);
+}
+
+void loop() {
+  if (!client.connected()) reconnect();
+  client.loop();
+
+  VL53L0X_RangingMeasurementData_t measure;
+  lox.rangingTest(&measure, false); // Pass in 'true' to get debug printout
+
+  if (measure.RangeStatus != 4) {  // 4 = out of range
+    Serial.print("Distance (mm): ");
+    Serial.println(measure.RangeMilliMeter);
+
+    String distance = String(measure.RangeMilliMeter);
+    client.publish("rfid/proximity", distance.c_str(), true);
+  } else {
+    Serial.println("Out of range");
+  }
+
+  delay(1000);  // 1 second delay
+}

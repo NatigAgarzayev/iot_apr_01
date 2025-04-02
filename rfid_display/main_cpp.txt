@@ -1,0 +1,91 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+
+#define SCREEN_WIDTH 64
+#define SCREEN_HEIGHT 48
+#define OLED_RESET    -1  // OLED reset pin (not used on shield)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// WiFi & MQTT config
+const char* ssid = "router11";
+const char* password = "iotempire";
+const char* mqtt_server = "192.168.14.1";
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void showMessage(String msg) {
+  display.clearDisplay();
+  display.setTextSize(1);         // Small font
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 16);
+  display.println(msg);
+  display.display();
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  String message;
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+
+  Serial.print("Received [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(message);
+
+  if (String(topic) == "rfid/access") {
+    showMessage(message);
+  }
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    if (client.connect("oled_display")) {
+      Serial.println("connected");
+      client.subscribe("rfid/access");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // OLED init
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    while (true);
+  }
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+  display.println("Waiting...");
+  display.display();
+
+  // WiFi + MQTT
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected");
+
+  client.setServer(mqtt_server, 1883);
+  client.setCallback(callback);
+}
+
+void loop() {
+  if (!client.connected()) reconnect();
+  client.loop();
+}

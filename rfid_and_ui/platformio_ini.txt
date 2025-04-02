@@ -1,0 +1,13 @@
+[env:d1_mini]
+platform = espressif8266
+board = d1_mini
+framework = arduino
+
+monitor_speed = 115200
+
+lib_deps =
+  bblanchon/ArduinoJson@^6.21.2
+  knolleary/PubSubClient@^2.8
+  miguelbalboa/MFRC522@^1.4.10
+
+upload_speed = 921600
